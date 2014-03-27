@@ -132,7 +132,7 @@ def topDownSplitting():
 	return True
 
 def bottomUpClustering():
-	""" Merges micro-clusters to provide the final clustering """
+	""" Merge micro-clusters to provide the final clustering """
 	global listOfMergeablePairs
 	for c1 in pq:
 		for c2 in pq:
