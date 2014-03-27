@@ -1,7 +1,15 @@
 #!/usr/bin/env python
-# IMPORTANT:
-# Documentation stored at
-# /afs/cern.ch/user/e/egraveri/public/VeloHough.pdf
+#
+# Implementation of the M-CLUBS algorithm
+# by E. Masciari, G.M.Mazzeo and C. Zaniolo
+# ("A New, Fast and Accurate Algorithm for
+# Hierarchical Clustering on Euclidean Distances",
+# PAKDD 2, volume 7819 of Lecture Notes in Computer Science,
+# page 111-122. Springer, 2013)
+#
+# Author: Elena Graverini
+# Contact: elena.graverini@cern.ch
+
 import numpy as np
 import sys
 
