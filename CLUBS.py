@@ -12,6 +12,11 @@
 # Information Sciences, Volume 262 (2014),
 # pages 32-45
 #
+# The program takes a dictionary as input data set:
+#     key = tuple of coordinates (binned)
+#     value = bin content
+# It divides the data set into clusters and 
+# returns their centers of gravity.
 
 import numpy as np
 import sys
