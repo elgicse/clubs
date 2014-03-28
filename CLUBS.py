@@ -21,6 +21,7 @@
 import numpy as np
 import sys
 from random import randint
+import matplotlib.pyplot as plt
 
 dataSet = None
 ndim = None
@@ -71,10 +72,11 @@ class newCluster():
 		return self.CoG
 	def computeSqSum(self):
 		# For each dimension, compute sum of square coordinates
-		keys = keylist
+		keys = keylist[:]
 		self.sqSum = list(self.sqSum)
 		for i in xrange(ndim):
-			keys = [key for key in keys if key[i] >= self.limitsLow[i] and key[i] <= self.limitsHigh[i]]
+			ckeys = [key for key in keys if key[i] >= self.limitsLow[i] and key[i] <= self.limitsHigh[i]]
+			keys = ckeys
 		for i in xrange(ndim):
 			for key in keys:
 				# A bin with weight W counts as W times that bin
@@ -89,10 +91,11 @@ class newTreeNode():
 		self.left = None
 		self.right = None
 		self.clusterData = newCluster(limitsLow, limitsHigh)
-	def setChildren(self, left, right):
+	def setChildren(self, children):
+		left,right = children
 		# Sets two clusters as children of the current node
 		self.left = newTreeNode(left.limitsLow, left.limitsHigh)
-		self.right = newTreeNode(left.limitsLow, left.limitsHigh)
+		self.right = newTreeNode(right.limitsLow, right.limitsHigh)
 
 class newPriorityQueue():
 	""" Selects the cluster with the highest SSQ """
@@ -118,10 +121,11 @@ class newPriorityQueue():
 
 def computeWeightIn(limitsLow, limitsHigh):
 	""" Compute content of cluster """
-	keys = keylist
+	keys = keylist[:]
 	weight = 0
 	for i in xrange(ndim):
-		keys = [key for key in keys if key[i] >= limitsLow[i] and key[i] <= limitsHigh[i]]
+		ckeys = [key for key in keys if key[i] >= limitsLow[i] and key[i] <= limitsHigh[i]]
+		keys = ckeys
 	for key in keys:
 		#print key, dataSet[key]
 		weight += dataSet[key]
@@ -129,10 +133,11 @@ def computeWeightIn(limitsLow, limitsHigh):
 
 def computeSum(limitsLow, limitsHigh):
 	""" Compute vector sum of the cluster """
-	keys = keylist
+	keys = keylist[:]
 	vecSum = [0]*ndim
 	for i in xrange(ndim):
-		keys = [key for key in keys if key[i] >= limitsLow[i] and key[i] <= limitsHigh[i]]
+		ckeys = [key for key in keys if key[i] >= limitsLow[i] and key[i] <= limitsHigh[i]]
+		keys = ckeys
 	for i in xrange(ndim):
 		for key in keys:
 			# A bin with weight W counts as W times that bin
@@ -194,7 +199,7 @@ def findClustersToMerge():
 
 def splitCluster(cl, avgDeltaSSQ):
 	""" Returns the margins of the two children or False """
-	keys = keylist
+	keys = keylist[:]
 	refDssq = 0
 	leftLimitsLow = [None]*ndim
 	leftLimitsHigh = [None]*ndim
@@ -203,14 +208,15 @@ def splitCluster(cl, avgDeltaSSQ):
 	subClusters = [None]*2
 	# Select only the range of the current cluster
 	for i in xrange(ndim):
-		keys = [key for key in keys if key[i] > cl.limitsLow[i] and key[i] < cl.limitsHigh[i]]
+		ckeys = [key for key in keys if key[i] > cl.limitsLow[i] and key[i] < cl.limitsHigh[i]]
+		keys = ckeys
 	for i in xrange(ndim):
 		for key in keys:
-			leftLimitsLow = cl.limitsLow
-			leftLimitsHigh = cl.limitsHigh
+			leftLimitsLow = cl.limitsLow[:]
+			leftLimitsHigh = cl.limitsHigh[:]
 			leftLimitsHigh[i] = key[i]
-			rightLimitsLow = cl.limitsLow
-			rightLimitsHigh = cl.limitsHigh
+			rightLimitsLow = cl.limitsLow[:]
+			rightLimitsHigh = cl.limitsHigh[:]
 			rightLimitsLow[i] = key[i]
 			# Create the two subclusters from the mother
 			left = newCluster(leftLimitsLow, leftLimitsHigh)
@@ -219,6 +225,7 @@ def splitCluster(cl, avgDeltaSSQ):
 			#print key
 			if left.weight>0 and right.weight>0:
 				newDssq = pow(computeDeltaSSQ(left, right), power)
+				#print computeDeltaSSQ(left, right), newDssq
 				if newDssq > refDssq:
 					# Look for the maximum weighted Delta SSQ
 					refDssq = newDssq
@@ -246,8 +253,8 @@ def initStructures():
 	# Initialize the root of the binary tree as the full data set
 	root = newTreeNode(marginsLow, marginsHigh)
 	pq.add(root)
-	#avgDeltaSSQ = root.clusterData.computeSSQ() / root.clusterData.weight
-	avgDeltaSSQ = root.clusterData.computeSSQ() / np.sqrt(len(keylist))
+	avgDeltaSSQ = root.clusterData.computeSSQ() / root.clusterData.weight
+	#avgDeltaSSQ = root.clusterData.computeSSQ() / np.sqrt(len(keylist))
 	return True
 
 def topDownSplitting():
@@ -279,7 +286,7 @@ def bottomUpClustering():
 	clustersToMerge = findClustersToMerge() # a pair of two clusters
 	if not clustersToMerge:
 		return True
-	minSSQincrease = computeDeltaSSQ(clustersToMerge)
+	minSSQincrease = computeDeltaSSQ(clustersToMerge[0], clustersToMerge[1])
 	while minSSQincrease < avgDeltaSSQ:
 		largerCluster = mergeClusters(clustersToMerge)
 		listOfMergeablePairs = [item for item in listOfMergeablePairs if item[0] is not clustersToMerge[0] and item[0] is not clustersToMerge[1] and item[1] is not clustersToMerge[0] and item[1] is not clustersToMerge[1]]
@@ -300,7 +307,7 @@ def findClusters():
 	if not initStructures():
 		print "Error: initStructures"
 		sys.exit(1)
-	#sys.exit(0)
+	sys.exit(0)
 	if not topDownSplitting():
 		print "Error: topDownSplitting"
 		sys.exit(1)
@@ -330,10 +337,17 @@ if __name__ == '__main__':
 	"""sample usage"""
 	dim = 50
 	DS = dict([((x,y),0) for x in range(dim) for y in range(dim)])	
-	for i in range(1800):
-	    DS[(randint(30,dim-1),randint(0,dim-1))] = randint(0,20)
-	for i in range(700):
-	    DS[(randint(0,20),randint(0,dim-1))] = randint(0,20)
+	for i in range(1300):
+	    DS[(randint(30,dim-1),randint(0,dim-1))] = 1
+	for i in range(600):
+	    DS[(randint(0,20),randint(0,dim-1))] = 1
+	x,y = [],[]
+	for item in DS.keys():
+		if DS[item] == 1:                  
+			x.append(item[0])
+			y.append(item[1])
+	plt.ion()
+	plt.scatter(x,y)
 	clusters = CLUBSclustering(DS,2)
 	print clusters
 
