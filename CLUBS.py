@@ -1,14 +1,17 @@
 #!/usr/bin/env python
 #
-# Implementation of the M-CLUBS algorithm
-# by E. Masciari, G.M.Mazzeo and C. Zaniolo
-# ("A New, Fast and Accurate Algorithm for
-# Hierarchical Clustering on Euclidean Distances",
-# PAKDD 2, volume 7819 of Lecture Notes in Computer Science,
-# page 111-122. Springer, 2013)
-#
 # Author: Elena Graverini
 # Contact: elena.graverini@cern.ch
+#
+# Implementation of the M-CLUBS algorithm
+# by E. Masciari, G.M. Mazzeo, C. Zaniolo
+#
+# Original documentation in:
+# "Analysing microarray expression data
+# through effective clustering",
+# Information Sciences, Volume 262 (2014),
+# pages 32-45
+#
 
 import numpy as np
 import sys
@@ -24,18 +27,24 @@ listOfMergeablePairs = None
 class newCluster():
 	""" Class holding cluster data (edges and statistics) """
 	def __init__(self, limitsLow, limitsHigh, status = None):
-		""" Either merge two clusters (bottom-up) or create a new micro-cluster (top-down) """
+		# Either merge two clusters (bottom-up)
+		# or create a new micro-cluster (top-down)
 		if status is "merging":
+			# The first two input parameters are two newCluster() objects
 			first = limitsLow
 			second = limitsHigh
-			self.limitsLow = None
-			self.limitsHigh = None
+			self.limitsLow = [None]*ndim
+			self.limitsHigh = [None]*ndim
 			self.weight = first.weight + second.weight
 			self.Sum = first.Sum + second.Sum
+			for i in xrange(ndim):
+				self.limitsLow[i] = min(first.limitsLow[i], second.limitsLow[i])
+				self.limitsHigh[i] = max(first.limitsHigh[i], second.limitsHigh[i])
 			self.sqSum = 0
 			self.CoG = 0
 			self.SSQ = 0
 		else:
+			# The first two parameters are the edges of the cluster
 			self.limitsLow = limitsLow
 			self.limitsHigh = limitsHigh
 			self.weight = computeWeightIn(limitsLow, limitsHigh)
@@ -44,17 +53,17 @@ class newCluster():
 			self.CoG = 0
 			self.SSQ = 0
 	def computeSSQ(self):
-		""" Compute SSQ of the cluster """
+		# Compute SSQ of the cluster
 		self.computeSqSum()
 		for i in xrange(ndim):
 			self.SSQ += ( self.sqSum[i] - pow(self.Sum[i],2)/self.weight )
 		return self.SSQ
 	def computeCoG(self):
-		""" Find center of gravity of the cluster """
+		# Find center of gravity of the cluster 
 		self.CoG = self.Sum / self.weight
 		return self.CoG
 	def computeSqSum(self):
-		""" For each dimension, compute sum of square coordinates """
+		# For each dimension, compute sum of square coordinates
 		pass
 
 def computeWeightIn(limitsLow, limitsHigh):
