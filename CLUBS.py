@@ -28,6 +28,7 @@ pq = None
 done = False
 avgDeltaSSQ = None
 listOfMergeablePairs = None
+keylist = None
 
 class newCluster():
 	""" Class holding cluster data (edges and statistics) """
@@ -45,8 +46,8 @@ class newCluster():
 			for i in xrange(ndim):
 				self.limitsLow[i] = min(first.limitsLow[i], second.limitsLow[i])
 				self.limitsHigh[i] = max(first.limitsHigh[i], second.limitsHigh[i])
-			self.sqSum = 0
-			self.CoG = 0
+			self.sqSum = [0]*ndim
+			self.CoG = [None]*ndim
 			self.SSQ = 0
 		else:
 			# The first two parameters are the edges of the cluster
@@ -54,8 +55,8 @@ class newCluster():
 			self.limitsHigh = limitsHigh
 			self.weight = computeWeightIn(limitsLow, limitsHigh)
 			self.Sum = computeSum(limitsLow, limitsHigh)
-			self.sqSum = 0
-			self.CoG = 0
+			self.sqSum = [0]*ndim
+			self.CoG = [None]*ndim
 			self.SSQ = 0
 	def computeSSQ(self):
 		# Compute SSQ of the cluster
@@ -65,19 +66,43 @@ class newCluster():
 		return self.SSQ
 	def computeCoG(self):
 		# Find center of gravity of the cluster 
-		self.CoG = self.Sum / self.weight
+		self.CoG = tuple(x/self.weight for x in self.Sum)
 		return self.CoG
 	def computeSqSum(self):
 		# For each dimension, compute sum of square coordinates
-		pass
+		keys = keylist
+		for i in xrange(ndim):
+			keys = [key for key in keys if key[i] > limitsLow[i] and key[i] < limitsHigh[i]]
+		for i in xrange(ndim):
+			for key in keys:
+				# A bin with weight W counts as W times that bin
+				self.sqSum[i] += ( pow(key[i],2) * dataSet[key] )
+		# Make the vector sum of squares an immutable object
+		self.sqSum = tuple(self.sqSum)
+		return self.sqSum
 
 def computeWeightIn(limitsLow, limitsHigh):
 	""" Compute content of cluster """
-	pass
+	keys = keylist
+	weight = 0
+	for i in xrange(ndim):
+		keys = [key for key in keys if key[i] > limitsLow[i] and key[i] < limitsHigh[i]]
+	for key in keys:
+		weight += dataSet[key]
+	return weight
 
 def computeSum(limitsLow, limitsHigh):
 	""" Compute vector sum of the cluster """
-	pass
+	keys = keylist
+	vecSum = [0]*ndim
+	for i in xrange(ndim):
+		keys = [key for key in keys if key[i] > limitsLow[i] and key[i] < limitsHigh[i]]
+	for i in xrange(ndim):
+		for key in keys:
+			# A bin with weight W counts as W times that bin
+			vecSum[i] += (key[i] * dataSet[key])
+	# Make the vector sum an immutable object
+	return tuple(vecSum)
 
 class newTreeNode():
 	""" Auxiliary binary tree for top-down splitting """
@@ -120,23 +145,30 @@ def findClustersToMerge():
 	bestPair = listOfMergeablePairs[0]
 	return bestPair[0], bestPair[1]
 
+def splitCluster(cl, avgDeltaSSQ):
+	""" Returns the margins of the two children or False """
+	pass
+	
 def mergeClusters(c1, c2):
 	""" Merge two adjacent clusters """
 	return newCluster(c1, c2, "merging")
 
 def initStructures():
 	""" Initialize priority queue and binary tree """
-	global avgDeltaSSQ, pq
-	marginsLow = "MARGINI INFERIORI DEL DATA SET NELLE N DIMENSIONI"
-	marginsHigh = "MARGINI SUPERIORI DEL DATA SET NELLE N DIMENSIONI"
+	global avgDeltaSSQ, pq, keylist
+	keylist = dataSet.keys()
+	# Edges of the data set
+	marginsLow = [None]*ndim
+	marginsHigh = [None]*ndim
+	for i in xrange(ndim):
+		sortedkeys = sorted(keylist, key = lambda x: x[i])
+		marginsLow[i] = sortedkeys[0][i]
+		marginsHigh[i] = sortedkeys[-1][i]
+	# Initialize the root of the binary tree as the full data set
 	root = newTreeNode(marginsLow, marginsHigh)
 	pq.add(root)
 	avgDeltaSSQ = root.clusterData.computeSSQ() / root.clusterData.weight
 	return True
-
-def splitCluster(cl, avgDeltaSSQ):
-	""" Returns the margins of the two children or False """
-	pass
 
 def topDownSplitting():
 	""" Split the data set into micro-clusters """
@@ -191,7 +223,7 @@ def findClusters():
 	return pq
 
 def CLUBSclustering(dataSet, ndim):
-	""" Execute findClusters() and handle I/O"""
+	""" Execute findClusters() and handle I/O """
 	global dataSet, ndim, power, pq, done, avgDeltaSSQ, listOfMergeablePairs
 	dataSet = dataSet
 	ndim = ndim
