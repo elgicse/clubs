@@ -81,6 +81,28 @@ class newCluster():
 		self.sqSum = tuple(self.sqSum)
 		return self.sqSum
 
+class newTreeNode():
+	""" Auxiliary binary tree for top-down splitting """
+	def __init__(self, limitsLow, limitsHigh):
+		self.left = None
+		self.right = None
+		self.clusterData = newCluster(limitsLow, limitsHigh)
+	def setChildren(self, left, right):
+		self.left = left
+		self.right = right
+
+class newPriorityQueue():
+	""" Selects the cluster with the highest SSQ """
+	def __init__(self):
+		self.queue = []
+	def add(self,cl):
+		self.queue.append((cl,cl.SSQ))
+	def get(self):
+		self.queue = sorted(self.queue, key = lambda x: x[1])
+		return self.queue[-1]
+	def delete(self, cl):
+		self.queue.remove(cl)
+
 def computeWeightIn(limitsLow, limitsHigh):
 	""" Compute content of cluster """
 	keys = keylist
@@ -104,28 +126,6 @@ def computeSum(limitsLow, limitsHigh):
 	# Make the vector sum an immutable object
 	return tuple(vecSum)
 
-class newTreeNode():
-	""" Auxiliary binary tree for top-down splitting """
-	def __init__(self, limitsLow, limitsHigh):
-		self.left = None
-		self.right = None
-		self.clusterData = newCluster(limitsLow, limitsHigh)
-	def setChildren(self, left, right):
-		self.left = left
-		self.right = right
-
-class newPriorityQueue():
-	""" Selects the cluster with the highest SSQ """
-	def __init__(self):
-		self.queue = []
-	def add(self,cl):
-		self.queue.append((cl,cl.SSQ))
-	def get(self):
-		self.queue = sorted(self.queue, key = lambda x: x[1])
-		return self.queue[-1]
-	def delete(self, cl):
-		self.queue.remove(cl)
-
 def computeDeltaSSQ(c1, c2):
 	""" Variation in SSQ due to the splitting of a cluster or to the merging of two sub-clusters"""
 	dssq = 0
@@ -136,7 +136,37 @@ def computeDeltaSSQ(c1, c2):
 
 def areAdjacent(c1, c2):
 	""" Find out if two clusters are adjacent or overlapping """
-	pass
+	# Case 1: one edge in common
+	for i in xrange(ndim):
+		if (c1.limitsHigh[i] == c2.limitsLow[i]) or (c2.limitsHigh[i] == c1.limitsLow[i]):
+			return True
+	# Case 2: partially overlapping (in at least ndim-1 dimensions)
+	dimCount = 0
+	for i in xrange(ndim):
+		if testOverlapping(c1, c2) or testOverlapping(c2, c1):
+			dimCount += 1
+	if dimCount >= (ndim-1):
+		return True
+	# In any other case:
+	return False
+
+def testOverlapping(c1, c2):
+	""" Check if two clusters overlap in one dimension """
+	c1.computeCoG()
+	c2.computeCoG()
+	spatialOverlapping = c2.limitsLow[i] < c1.limitsHigh[i]
+	proximity = dist(c1.CoG, c2.CoG) <= (np.abs(c1.CoG[i]-c1.limitsHigh[i]) + np.abs(c2.CoG[i]-c2.limitsLow[i]))
+	if (spatialOverlapping and proximity):
+		return True
+	else:
+		return False
+
+def dist(p1, p2):
+	""" Compute the distance between two points """
+	dist = 0
+	for i in xrange(ndim):
+		dist += pow(p1[i]-p2[i], 2)
+	return np.sqrt(dist)
 
 def findClustersToMerge():
 	""" Find the pair of adjacent clusters that yiealds the least SSQ increase """
@@ -148,7 +178,7 @@ def findClustersToMerge():
 def splitCluster(cl, avgDeltaSSQ):
 	""" Returns the margins of the two children or False """
 	pass
-	
+
 def mergeClusters(c1, c2):
 	""" Merge two adjacent clusters """
 	return newCluster(c1, c2, "merging")
