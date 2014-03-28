@@ -88,18 +88,20 @@ class newTreeNode():
 		self.right = None
 		self.clusterData = newCluster(limitsLow, limitsHigh)
 	def setChildren(self, left, right):
-		self.left = left
-		self.right = right
+		# Sets two clusters as children of the current node
+		self.left = newTreeNode(left.limitsLow, left.limitsHigh)
+		self.right = newTreeNode(left.limitsLow, left.limitsHigh)
 
 class newPriorityQueue():
 	""" Selects the cluster with the highest SSQ """
 	def __init__(self):
 		self.queue = []
-	def add(self,cl):
-		self.queue.append((cl,cl.SSQ))
+	def add(self, node):
+		self.queue.append((node, node.clusterData.computeSSQ()))
 	def get(self):
+		# Returns the cluster with the highest SSQ
 		self.queue = sorted(self.queue, key = lambda x: x[1])
-		return self.queue[-1]
+		return self.queue[-1][0]
 	def delete(self, cl):
 		self.queue.remove(cl)
 
@@ -154,8 +156,8 @@ def testOverlapping(c1, c2):
 	""" Check if two clusters overlap in one dimension """
 	c1.computeCoG()
 	c2.computeCoG()
-	spatialOverlapping = c2.limitsLow[i] < c1.limitsHigh[i]
-	proximity = dist(c1.CoG, c2.CoG) <= (np.abs(c1.CoG[i]-c1.limitsHigh[i]) + np.abs(c2.CoG[i]-c2.limitsLow[i]))
+	spatialOverlapping = bool(c2.limitsLow[i] < c1.limitsHigh[i])
+	proximity = bool(dist(c1.CoG, c2.CoG) <= (np.abs(c1.CoG[i]-c1.limitsHigh[i]) + np.abs(c2.CoG[i]-c2.limitsLow[i])))
 	if (spatialOverlapping and proximity):
 		return True
 	else:
@@ -177,7 +179,37 @@ def findClustersToMerge():
 
 def splitCluster(cl, avgDeltaSSQ):
 	""" Returns the margins of the two children or False """
-	pass
+	keys = keylist
+	refDssq = 0
+	leftLimitsLow = [None]*ndim
+	leftLimitsHigh = [None]*ndim
+	rightLimitsHigh = [None]*ndim
+	rightLimitsLow = [None]*ndim
+	subClusters = [None]*2
+	# Select only the range of the current cluster
+	for i in xrange(ndim):
+		keys = [key for key in keys if key[i] > cl.limitsLow[i] and key[i] < cl.limitsHigh[i]]
+	for i in xrange(ndim):
+		for key in keys:
+			leftLimitsLow = cl.limitsLow
+			leftLimitsHigh = cl.limitsHigh
+			leftLimitsHigh[i] = key[i]
+			rightLimitsLow = cl.limitsLow
+			rightLimitsHigh = cl.limitsHigh
+			rightLimitsLow[i] = key[i]
+			# Create the two subclusters from the mother
+			left = newCluster(leftLimitsLow, leftLimitsHigh)
+			right = newCluster(rightLimitsLow, rightLimitsHigh)
+			# Compute weighted Delta SSQ
+			newDssq = pow(computeDeltaSSQ(left, right), power)
+			if newDssq > refDssq:
+				# Look for the maximum weighted Delta SSQ
+				refDssq = newDssq
+				subClusters = [left, right]
+	if refDssq > avgDeltaSSQ:
+		return subClusters
+	else:
+		return False
 
 def mergeClusters(c1, c2):
 	""" Merge two adjacent clusters """
@@ -204,15 +236,15 @@ def topDownSplitting():
 	""" Split the data set into micro-clusters """
 	global pq, done
 	while not done:
-		currentCluster = pq.get()
+		currentCluster = pq.get().clusterData
 		children = splitCluster(currentCluster, avgDeltaSSQ)
 		if not children:
 			done = True
 		else:
 			currentCluster.setChildren(children)
 			pq.delete(currentCluster)
-			pq.add(children[0])
-			pq.add(children[1])
+			pq.add(currentCluster.left)
+			pq.add(currentCluster.right)
 	return True
 
 def bottomUpClustering():
