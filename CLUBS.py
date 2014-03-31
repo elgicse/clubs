@@ -20,6 +20,7 @@
 
 import numpy as np
 import sys
+import time
 from random import randint
 import matplotlib.pyplot as plt
 
@@ -51,7 +52,6 @@ class newCluster():
 			self.sqSum = self.computeSqSum()
 			self.SSQ = self.computeSSQ()
 			self.CoG = [None]*ndim
-			self.avgDeltaSSQ = [None]*ndim
 		else:
 			# The first two parameters are the edges of the cluster
 			self.limitsLow = limitsLow
@@ -61,7 +61,6 @@ class newCluster():
 			self.sqSum = self.computeSqSum()
 			self.SSQ = self.computeSSQ()
 			self.CoG = [None]*ndim
-			self.avgDeltaSSQ = [None]*ndim
 	def computeSSQ(self):
 		# Compute SSQ of the cluster
 		self.SSQ = 0
@@ -71,6 +70,7 @@ class newCluster():
 				self.SSQ += ( self.sqSum[i] - pow(self.Sum[i],2)/self.weight )
 		return self.SSQ
 	def computeAvgDeltaSSQ(self):
+		self.avgDeltaSSQ = [None]*ndim
 		keys = keylist[:]
 		for i in xrange(ndim):
 			ckeys = [key for key in keys if key[i] >= self.limitsLow[i] and key[i] <= self.limitsHigh[i]]
@@ -128,7 +128,7 @@ class newPriorityQueue():
 	def makeListOfClusters(self):
 		# For the bottom-up part of the algorithm
 		self.listOfClusters = [item[0].clusterData for item in self.queue]
-		print self.listOfClusters
+		#print self.listOfClusters
 	def addCluster(self, cl):
 		self.listOfClusters.append(cl)
 	def deleteCluster(self, cl):
@@ -260,6 +260,15 @@ def mergeClusters(c1, c2):
 	""" Merge two adjacent clusters """
 	return newCluster(c1, c2, "merging")
 
+def generateListOfMergeablePairs():
+	global listOfMergeablePairs
+	listOfMergeablePairs = []
+	for c1 in pq.listOfClusters:
+		for c2 in pq.listOfClusters:
+			if areDifferentClusters(c1, c2) and areAdjacent(c1, c2):
+				dssq = computeDeltaSSQ(c1, c2)
+				listOfMergeablePairs.append( (c1, c2, dssq) )
+
 def initStructures():
 	""" Initialize priority queue and binary tree """
 	global avgDeltaSSQ, pq, keylist
@@ -301,43 +310,37 @@ def bottomUpClustering():
 	done = False
 	pq.makeListOfClusters()
 	# Generate the list of pairs of clusters that can be merged
-	for c1 in pq.listOfClusters:
-		for c2 in pq.listOfClusters:
-			if areDifferentClusters(c1, c2) and areAdjacent(c1, c2):
-				dssq = computeDeltaSSQ(c1, c2)
-				listOfMergeablePairs.append( (c1, c2, dssq) )
+	generateListOfMergeablePairs()
 	if len(listOfMergeablePairs) is 0:
+		done = True
+	if len(pq.listOfClusters) < 2:
 		done = True
 	while not done:
 		c1, c2 = findClustersToMerge() # a pair of two clusters
 		minSSQincrease = computeDeltaSSQ(c1, c2)
 		largerCluster = mergeClusters(c1, c2)
-		avgDeltaSSQ = largerCluster.computeAvgDeltaSSQ()
-		# Confirm the mergin only if minSSQincrease < avgDeltaSSQ
-		while minSSQincrease < avgDeltaSSQ:
-			# Remove from the list of mergeable clusters all the tuples involving c1 and/or c2
-			listOfMergeablePairs = [item for item in listOfMergeablePairs if ( areDifferentClusters(item[0], c1)
-				and areDifferentClusters(item[0], c2)
-				and areDifferentClusters(item[1], c1)
-				and areDifferentClusters(item[1], c2))]
+		avgDeltaSSQ = np.average(largerCluster.computeAvgDeltaSSQ())
+		# Confirm the merging only if minSSQincrease < avgDeltaSSQ
+		if minSSQincrease < avgDeltaSSQ:
+			print minSSQincrease, avgDeltaSSQ, c1.computeAvgDeltaSSQ(), c2.computeAvgDeltaSSQ()
 			# Remove the two merged clusters from the list of current custers...
 			pq.deleteCluster(c1)
 			pq.deleteCluster(c2)
 			# ...and add the newly created one
 			pq.addCluster(largerCluster)
-			# Refresh the list of mergeable clusters
-			for cl in pq.listOfClusters:
-				if areDifferentClusters(cl, largerCluster) and areAdjacent(largerCluster, cl):
-					dssq = computeDeltaSSQ(largerCluster, cl)
-					listOfMergeablePairs.append( (largerCluster, cl, dssq) )
-			if len(listOfMergeablePairs) is 0:
+			# Regenerate the list of pairs of clusters that can be merged
+			if len(pq.listOfClusters) < 2:
 				done = True
 			else:
-				c1, c2 = findClustersToMerge()
-				minSSQincrease = computeDeltaSSQ(c1, c2)
-				largerCluster = mergeClusters(c1, c2)
-				avgDeltaSSQ = largerCluster.computeAvgDeltaSSQ()
-		done = True
+				generateListOfMergeablePairs()
+				if len(listOfMergeablePairs) is 0:
+					done = True
+				else:
+					c1, c2 = findClustersToMerge()
+					minSSQincrease = computeDeltaSSQ(c1, c2)
+					largerCluster = mergeClusters(c1, c2)
+					avgDeltaSSQ = np.average(largerCluster.computeAvgDeltaSSQ())
+	done = True
 	print "Micro-clusters regrouped into %s clusters."%len(pq.listOfClusters)
 	return True
 
@@ -346,7 +349,7 @@ def findClusters():
 	if not initStructures():
 		print "Error: initStructures"
 		sys.exit(1)
-	sys.exit(0)
+	#sys.exit(0)
 	if not topDownSplitting():
 		print "Error: topDownSplitting"
 		sys.exit(1)
@@ -376,14 +379,14 @@ if __name__ == '__main__':
 	"""sample usage"""
 	dim = 50
 	DS = dict([((x,y),0) for x in range(dim) for y in range(dim)])	
-	#for i in range(1300):
-	#    DS[(randint(30,dim-1),randint(0,dim-1))] = 1
-	#for i in range(600):
-	#    DS[(randint(0,20),randint(0,dim-1))] = 1
-	for i in range(10):
+	for i in range(1300):
 	    DS[(randint(30,dim-1),randint(0,dim-1))] = 1
-	for i in range(100):
+	for i in range(600):
 	    DS[(randint(0,20),randint(0,dim-1))] = 1
+	#for i in range(10):
+	#    DS[(randint(30,dim-1),randint(0,dim-1))] = 1
+	#for i in range(100):
+	#    DS[(randint(0,20),randint(0,dim-1))] = 1
 	x,y = [],[]
 	for item in DS.keys():
 		if DS[item] == 1:                  
@@ -391,6 +394,7 @@ if __name__ == '__main__':
 			y.append(item[1])
 	plt.ion()
 	plt.scatter(x,y)
+	plt.pause(0.001)
 	clusters = CLUBSclustering(DS,2)
 	print clusters
 
