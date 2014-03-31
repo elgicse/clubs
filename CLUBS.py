@@ -274,13 +274,22 @@ def topDownSplitting():
 	print "Data set split into %s micro-clusters."%len(pq.queue)
 	return True
 
+def areDifferentClusters(c1, c2):
+	""" Check if two newCluster() objects refer to the same physical cluster """
+	w1, w2 = c1.weight, c2.weight
+	s1, s2 = c1.Sum, c2.Sum
+	if (w2 is not w1) and (s2 is not s1):
+		return True
+	else:
+		return False
+
 def bottomUpClustering():
 	""" Merge micro-clusters to provide the final clustering """
 	global listOfMergeablePairs, pq
 	pq.makeListOfClusters()
 	for c1 in pq.listOfClusters:
 		for c2 in pq.listOfClusters:
-			if (c2 is not c1) and areAdjacent(c1, c2):
+			if areDifferentClusters(c1, c2) and areAdjacent(c1, c2):
 				dssq = computeDeltaSSQ(c1, c2)
 				listOfMergeablePairs.append( (c1, c2, dssq) )
 	clustersToMerge = findClustersToMerge() # a pair of two clusters
@@ -294,7 +303,7 @@ def bottomUpClustering():
 		pq.deleteCluster(clustersToMerge[1])
 		pq.addCluster(largerCluster)
 		for cl in pq.listOfClusters:
-			if (cl is not largerCluster) and areAdjacent(largerCluster, cl):
+			if areDifferentClusters(cl, largerCluster) and areAdjacent(largerCluster, cl):
 				dssq = computeDeltaSSQ(largerCluster, cl)
 				listOfMergeablePairs.append( (largerCluster, cl, dssq) )
 		clustersToMerge = findClustersToMerge()
