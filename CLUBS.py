@@ -192,8 +192,6 @@ def findClustersToMerge():
 	""" Find the pair of adjacent clusters that yiealds the least SSQ increase """
 	global listOfMergeablePairs
 	listOfMergeablePairs = sorted(listOfMergeablePairs, key = lambda x: x[2])
-	if len(listOfMergeablePairs) is 0:
-		return False
 	bestPair = listOfMergeablePairs[0]
 	return bestPair[0], bestPair[1]
 
@@ -285,29 +283,42 @@ def areDifferentClusters(c1, c2):
 
 def bottomUpClustering():
 	""" Merge micro-clusters to provide the final clustering """
-	global listOfMergeablePairs, pq
+	global listOfMergeablePairs, pq, done
+	done = False
 	pq.makeListOfClusters()
+	# Generate the list of pairs of clusters that can be merged
 	for c1 in pq.listOfClusters:
 		for c2 in pq.listOfClusters:
 			if areDifferentClusters(c1, c2) and areAdjacent(c1, c2):
 				dssq = computeDeltaSSQ(c1, c2)
 				listOfMergeablePairs.append( (c1, c2, dssq) )
-	clustersToMerge = findClustersToMerge() # a pair of two clusters
-	if not clustersToMerge:
-		return True
-	minSSQincrease = computeDeltaSSQ(clustersToMerge[0], clustersToMerge[1])
-	while minSSQincrease < avgDeltaSSQ:
-		largerCluster = mergeClusters(clustersToMerge)
-		listOfMergeablePairs = [item for item in listOfMergeablePairs if item[0] is not clustersToMerge[0] and item[0] is not clustersToMerge[1] and item[1] is not clustersToMerge[0] and item[1] is not clustersToMerge[1]]
-		pq.deleteCluster(clustersToMerge[0])
-		pq.deleteCluster(clustersToMerge[1])
-		pq.addCluster(largerCluster)
-		for cl in pq.listOfClusters:
-			if areDifferentClusters(cl, largerCluster) and areAdjacent(largerCluster, cl):
-				dssq = computeDeltaSSQ(largerCluster, cl)
-				listOfMergeablePairs.append( (largerCluster, cl, dssq) )
-		clustersToMerge = findClustersToMerge()
-		minSSQincrease = computeDeltaSSQ(clustersToMerge)
+	if len(listOfMergeablePairs) is 0:
+		done = True
+	while not done:
+		c1, c2 = findClustersToMerge() # a pair of two clusters
+		minSSQincrease = computeDeltaSSQ(c1, c2)
+		while minSSQincrease < avgDeltaSSQ:
+			largerCluster = mergeClusters(c1, c2)
+			# Remove from the list of mergeable clusters all the tuples involving c1 and/or c2
+			listOfMergeablePairs = [item for item in listOfMergeablePairs if ((item[0] is not c1)
+				(and item[0] is not c2)
+				(and item[1] is not c1)
+				(and item[1] is not c2))]
+			# Remove the two merged clusters from the list of current custers...
+			pq.deleteCluster(c1)
+			pq.deleteCluster(c2)
+			# ...and add the newly created one
+			pq.addCluster(largerCluster)
+			# Refresh the list of mergeable clusters
+			for cl in pq.listOfClusters:
+				if areDifferentClusters(cl, largerCluster) and areAdjacent(largerCluster, cl):
+					dssq = computeDeltaSSQ(largerCluster, cl)
+					listOfMergeablePairs.append( (largerCluster, cl, dssq) )
+			if len(listOfMergeablePairs) is 0:
+				done = True
+			c1, c2 = findClustersToMerge()
+			minSSQincrease = computeDeltaSSQ(c1, c2)
+		done = True
 	print "Micro-clusters regrouped into %s clusters."%len(pq.listOfClusters)
 	return True
 
