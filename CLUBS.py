@@ -43,35 +43,50 @@ class newCluster():
 			second = limitsHigh
 			self.limitsLow = [None]*ndim
 			self.limitsHigh = [None]*ndim
-			self.weight = first.weight + second.weight
-			self.Sum = first.Sum + second.Sum
 			for i in xrange(ndim):
 				self.limitsLow[i] = min(first.limitsLow[i], second.limitsLow[i])
 				self.limitsHigh[i] = max(first.limitsHigh[i], second.limitsHigh[i])
-			self.sqSum = [0]*ndim
+			self.weight = first.weight + second.weight
+			self.Sum = first.Sum + second.Sum
+			self.sqSum = self.computeSqSum()
+			self.SSQ = self.computeSSQ()
 			self.CoG = [None]*ndim
-			self.SSQ = 0
+			self.avgDeltaSSQ = [None]*ndim
 		else:
 			# The first two parameters are the edges of the cluster
 			self.limitsLow = limitsLow
 			self.limitsHigh = limitsHigh
 			self.weight = computeWeightIn(self.limitsLow, self.limitsHigh)
 			self.Sum = computeSum(self.limitsLow, self.limitsHigh)
-			self.sqSum = [0]*ndim
+			self.sqSum = self.computeSqSum()
+			self.SSQ = self.computeSSQ()
 			self.CoG = [None]*ndim
-			self.SSQ = 0
+			self.avgDeltaSSQ = [None]*ndim
 	def computeSSQ(self):
 		# Compute SSQ of the cluster
+		self.SSQ = 0
 		self.computeSqSum()
-		for i in xrange(ndim):
-			self.SSQ += ( self.sqSum[i] - pow(self.Sum[i],2)/self.weight )
+		if self.weight is not 0:
+			for i in xrange(ndim):
+				self.SSQ += ( self.sqSum[i] - pow(self.Sum[i],2)/self.weight )
 		return self.SSQ
+	def computeAvgDeltaSSQ(self):
+		keys = keylist[:]
+		for i in xrange(ndim):
+			ckeys = [key for key in keys if key[i] >= self.limitsLow[i] and key[i] <= self.limitsHigh[i]]
+			keys = ckeys
+		n = [0]*ndim
+		for i in xrange(ndim):
+			n[i] = len(set([key[i] for key in keys]))
+			self.avgDeltaSSQ[i] = self.SSQ / n[i]
+		return self.avgDeltaSSQ
 	def computeCoG(self):
 		# Find center of gravity of the cluster 
 		self.CoG = tuple(x/self.weight for x in self.Sum)
 		return self.CoG
 	def computeSqSum(self):
 		# For each dimension, compute sum of square coordinates
+		self.sqSum = [0]*ndim
 		keys = keylist[:]
 		self.sqSum = list(self.sqSum)
 		for i in xrange(ndim):
@@ -163,14 +178,14 @@ def areAdjacent(c1, c2):
 	# Case 2: partially overlapping (in at least ndim-1 dimensions)
 	dimCount = 0
 	for i in xrange(ndim):
-		if testOverlapping(c1, c2) or testOverlapping(c2, c1):
+		if testOverlapping(c1, c2, i) or testOverlapping(c2, c1, i):
 			dimCount += 1
 	if dimCount >= (ndim-1):
 		return True
 	# In any other case:
 	return False
 
-def testOverlapping(c1, c2):
+def testOverlapping(c1, c2, i):
 	""" Check if two clusters overlap in one dimension """
 	c1.computeCoG()
 	c2.computeCoG()
@@ -195,9 +210,9 @@ def findClustersToMerge():
 	bestPair = listOfMergeablePairs[0]
 	return bestPair[0], bestPair[1]
 
-def splitCluster(cl, avgDeltaSSQ):
+def splitCluster(cl):
 	""" Returns the margins of the two children or False """
-	keys = keylist[:]
+	avgDeltaSSQ = cl.computeAvgDeltaSSQ()
 	refDssq = 0
 	leftLimitsLow = [None]*ndim
 	leftLimitsHigh = [None]*ndim
@@ -205,6 +220,7 @@ def splitCluster(cl, avgDeltaSSQ):
 	rightLimitsLow = [None]*ndim
 	subClusters = [None]*2
 	# Select only the range of the current cluster
+	keys = keylist[:]
 	for i in xrange(ndim):
 		ckeys = [key for key in keys if key[i] > cl.limitsLow[i] and key[i] < cl.limitsHigh[i]]
 		keys = ckeys
@@ -224,12 +240,19 @@ def splitCluster(cl, avgDeltaSSQ):
 			if left.weight>0 and right.weight>0:
 				newDssq = pow(computeDeltaSSQ(left, right), power)
 				#print computeDeltaSSQ(left, right), newDssq
-				if newDssq > refDssq:
+				if (newDssq > refDssq) and (newDssq > avgDeltaSSQ[i]):
 					# Look for the maximum weighted Delta SSQ
 					refDssq = newDssq
 					subClusters = [left, right]
-	if refDssq > avgDeltaSSQ:
-		return subClusters
+					return subClusters
+	return False
+
+def areDifferentClusters(c1, c2):
+	""" Check if two newCluster() objects refer to the same physical cluster """
+	w1, w2 = c1.weight, c2.weight
+	s1, s2 = c1.Sum, c2.Sum
+	if (w2 is not w1) and (s2 is not s1):
+		return True
 	else:
 		return False
 
@@ -251,8 +274,8 @@ def initStructures():
 	# Initialize the root of the binary tree as the full data set
 	root = newTreeNode(marginsLow, marginsHigh)
 	pq.add(root)
-	avgDeltaSSQ = root.clusterData.computeSSQ() / root.clusterData.weight
-	#avgDeltaSSQ = root.clusterData.computeSSQ() / np.sqrt(len(keylist))
+	#avgDeltaSSQ = root.clusterData.computeSSQ() / root.clusterData.weight
+	avgDeltaSSQ = root.clusterData.computeSSQ() / np.sqrt(len(keylist))
 	return True
 
 def topDownSplitting():
@@ -261,7 +284,7 @@ def topDownSplitting():
 	while not done:
 		currentNode = pq.get()
 		currentCluster = currentNode[0].clusterData
-		children = splitCluster(currentCluster, avgDeltaSSQ)
+		children = splitCluster(currentCluster)
 		if not children:
 			done = True
 		else:
@@ -271,15 +294,6 @@ def topDownSplitting():
 			pq.add(currentNode[0].right)
 	print "Data set split into %s micro-clusters."%len(pq.queue)
 	return True
-
-def areDifferentClusters(c1, c2):
-	""" Check if two newCluster() objects refer to the same physical cluster """
-	w1, w2 = c1.weight, c2.weight
-	s1, s2 = c1.Sum, c2.Sum
-	if (w2 is not w1) and (s2 is not s1):
-		return True
-	else:
-		return False
 
 def bottomUpClustering():
 	""" Merge micro-clusters to provide the final clustering """
@@ -297,13 +311,15 @@ def bottomUpClustering():
 	while not done:
 		c1, c2 = findClustersToMerge() # a pair of two clusters
 		minSSQincrease = computeDeltaSSQ(c1, c2)
+		largerCluster = mergeClusters(c1, c2)
+		avgDeltaSSQ = largerCluster.computeAvgDeltaSSQ()
+		# Confirm the mergin only if minSSQincrease < avgDeltaSSQ
 		while minSSQincrease < avgDeltaSSQ:
-			largerCluster = mergeClusters(c1, c2)
 			# Remove from the list of mergeable clusters all the tuples involving c1 and/or c2
-			listOfMergeablePairs = [item for item in listOfMergeablePairs if ((item[0] is not c1)
-				(and item[0] is not c2)
-				(and item[1] is not c1)
-				(and item[1] is not c2))]
+			listOfMergeablePairs = [item for item in listOfMergeablePairs if ( areDifferentClusters(item[0], c1)
+				and areDifferentClusters(item[0], c2)
+				and areDifferentClusters(item[1], c1)
+				and areDifferentClusters(item[1], c2))]
 			# Remove the two merged clusters from the list of current custers...
 			pq.deleteCluster(c1)
 			pq.deleteCluster(c2)
@@ -316,8 +332,11 @@ def bottomUpClustering():
 					listOfMergeablePairs.append( (largerCluster, cl, dssq) )
 			if len(listOfMergeablePairs) is 0:
 				done = True
-			c1, c2 = findClustersToMerge()
-			minSSQincrease = computeDeltaSSQ(c1, c2)
+			else:
+				c1, c2 = findClustersToMerge()
+				minSSQincrease = computeDeltaSSQ(c1, c2)
+				largerCluster = mergeClusters(c1, c2)
+				avgDeltaSSQ = largerCluster.computeAvgDeltaSSQ()
 		done = True
 	print "Micro-clusters regrouped into %s clusters."%len(pq.listOfClusters)
 	return True
@@ -357,9 +376,13 @@ if __name__ == '__main__':
 	"""sample usage"""
 	dim = 50
 	DS = dict([((x,y),0) for x in range(dim) for y in range(dim)])	
-	for i in range(1300):
+	#for i in range(1300):
+	#    DS[(randint(30,dim-1),randint(0,dim-1))] = 1
+	#for i in range(600):
+	#    DS[(randint(0,20),randint(0,dim-1))] = 1
+	for i in range(10):
 	    DS[(randint(30,dim-1),randint(0,dim-1))] = 1
-	for i in range(600):
+	for i in range(100):
 	    DS[(randint(0,20),randint(0,dim-1))] = 1
 	x,y = [],[]
 	for item in DS.keys():
