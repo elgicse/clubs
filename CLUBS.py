@@ -203,7 +203,8 @@ def splitCluster(cl):
 	keys = list(set(keys))
 	for i in xrange(ndim):
 		for j in xrange(1,len(keys)):
-			if keys[j][i] is not keys[j-1][i]:
+			if keys[j][i] != keys[j-1][i]:
+				#print keys[j][i], keys[j-1][i], type(keys[j][i])
 				leftLimitsLow = cl.limitsLow[:]
 				leftLimitsHigh = cl.limitsHigh[:]
 				leftLimitsHigh[i] = 0.5 * (keys[j-1][i] + keys[j][i])
@@ -217,7 +218,7 @@ def splitCluster(cl):
 				if left.weight>0 and right.weight>0:
 					newDssq = pow(computeDeltaSSQ(left, right), power)
 					if (newDssq > refDssq) and (newDssq > avgDeltaSSQ):
-						print computeDeltaSSQ(left,right), newDssq, avgDeltaSSQ
+						#print computeDeltaSSQ(left,right), newDssq, avgDeltaSSQ, i, j, leftLimitsLow, leftLimitsHigh, rightLimitsLow, rightLimitsHigh
 						# Look for the maximum weighted Delta SSQ
 						refDssq = newDssq
 						subClusters = [left, right]
@@ -297,7 +298,7 @@ def bottomUpClustering():
 		minSSQincrease = computeDeltaSSQ(c1, c2)
 		# Confirm the merging only if minSSQincrease < avgDeltaSSQ
 		if minSSQincrease < avgDeltaSSQ:
-			print "minSSQincrease: %s avgDeltaSSQ: %s"%(minSSQincrease, avgDeltaSSQ)
+			#print "minSSQincrease: %s avgDeltaSSQ: %s"%(minSSQincrease, avgDeltaSSQ)
 			largerCluster = mergeClusters(c1, c2)
 			# Remove the two merged clusters from the list of current custers...
 			pq.deleteCluster(c1)
